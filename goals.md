@@ -25,5 +25,6 @@ I want to know what were the best performances I've seen from the NBA games I've
 #### Stage 3: Wrap-up
 
 1. Turn the project into an executable
-1. Create a requirements.txt file if needed (?)
-1. Create a README.md with instructions on how to use
+2. Create a requirements.txt file if needed (?)
+3. Create a README.md with instructions on how to use
+4. Make the repo public
