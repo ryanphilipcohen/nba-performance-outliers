@@ -10,7 +10,7 @@ I want to know what were the best performances I've seen from the NBA games I've
 
 0. Create a github repo and gitignore for version control
 1. Design functions to limit rate of calls per minute to prevent getting blocked for the day
-2. Design network functions to retrieve data of teams' schedules by year, individual games, and season averages
+2. Design network functions to retrieve data of teams' schedules by year, individual games, and season averages (done)
 3. Design parsing functions to parse those data tables into 3 different sqlite databases
 4. Design functions to interact with the individual game datatable: allowing filtering of players and stats, display the outlier games (relative to season avgs)
 5. Consider sorting these functions into different sections or files for readability
