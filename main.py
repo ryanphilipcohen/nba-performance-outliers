@@ -638,6 +638,13 @@ def normalize_year(year):
 def get_cached_schedule(team_code, year):
     """Return list of :class:`Game` objects if schedule rows are cached.
 
+    The NBA season spans two calendar years (e.g. the 2026 season includes
+    games played in October–December 2025), so when requesting a schedule for
+    *year* we look for games whose identifiers start with either that year or
+    the preceding one.  The scraping code itself pulls the full season page
+    which already contains both halves; the filter here simply ensures the
+    cached query returns everything relevant to the requested season.
+
     Args:
         team_code: full team name or three-letter code (normalization applied)
         year: integer season year
@@ -647,12 +654,13 @@ def get_cached_schedule(team_code, year):
     """
     team_code = normalize_team_code(team_code)
     year = normalize_year(year)
-    prefix = f"{year:04d}"
+    prefix1 = f"{year-1:04d}%"
+    prefix2 = f"{year:04d}%"
     with sqlite3.connect(SCHEDULE_DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM team_schedule WHERE team_code = ? AND game_id LIKE ?",
-            (team_code, prefix + "%"),
+            "SELECT * FROM team_schedule WHERE team_code = ? AND (game_id LIKE ? OR game_id LIKE ?)",
+            (team_code, prefix1, prefix2),
         ).fetchall()
         return [Game(**dict(r)) for r in rows]
 
@@ -738,9 +746,30 @@ def run_season_scraper(team_code, year):
     return stats
 
 
-def run_game_scraper(game_id, year):
+def season_year_for_game(game_id: str) -> int:
+    """Return the canonical season year for a given *game_id*.
+
+    The first four digits of the id are the calendar year; games played in
+    October–December belong to the following season.  This helper encapsulates
+    that logic so callers don’t accidentally use the wrong year when looking up
+    averages.
+    """
+    cal_year = int(game_id[:4])
+    month = int(game_id[4:6])
+    # any month from October (10) through December (12) is treated as the next
+    # season; everything else stays in the same year.
+    if month >= 10:
+        return cal_year + 1
+    return cal_year
+
+
+def run_game_scraper(game_id, year=None):
     """Fetch box-score statistics for a given game and ensure its season data
     are available.
+
+    ``year`` should normally be the season year (e.g. 2026 for a game played
+    in November 2025).  If omitted the value will be derived from ``game_id``
+    using :func:`season_year_for_game`.
 
     If the *game_id* is already cached the existing rows are returned, and
     the function also verifies that season averages for all teams in the game
@@ -749,6 +778,8 @@ def run_game_scraper(game_id, year):
     Returns a list of :class:`PlayerGamePerformance` objects.
     """
     init_all_dbs()
+    if year is None:
+        year = season_year_for_game(game_id)
     year = normalize_year(year)
 
     cached_game = get_cached_game(game_id)
@@ -789,12 +820,6 @@ def get_stat_outliers(game_id, year, stats_to_track=["pts", "trb", "ast", "fg3"]
         stats_to_track: list of field names (corresponding to columns in the
             databases) to compute percentages for.  Defaults to a handful of
             common rate stats.
-
-    Args:
-        game_id: identifier of the game to analyze
-        year: season year used when looking up averages
-        stats_to_track: list of field names (corresponding to columns in the
-            databases) to compute percentages for.
 
     Returns:
         ``List[StatOutlier]`` sorted by descending percentage (largest
@@ -844,19 +869,17 @@ if __name__ == "__main__":
 
     # 3. pick a specific game from the schedule and compare stats
     if schedule:
-        sample_game = schedule[0]  # first game as a simple example
-        print(
-            f"Inspecting game {sample_game.game_id} vs {sample_game.opponent} on {sample_game.date}"
-        )
+        # sample_game = schedule[0]  # first game as a simple example
+        # print(
+        #     f"Inspecting game {sample_game.game_id} vs {sample_game.opponent} on {sample_game.date}"
+        # )
 
         # fetch the box-score stats (cached if already pulled earlier)
-        game_stats = run_game_scraper(sample_game.game_id, 2026)
-        print(
-            f"Retrieved {len(game_stats)} player performances for game {sample_game.game_id}"
-        )
+        game_stats = run_game_scraper("202511250WAS", 2026)
+        print(f"Retrieved {len(game_stats)} player performances for game 202511250WAS")
 
         # compute outliers relative to season averages
-        outliers = get_stat_outliers(sample_game.game_id, 2026)
+        outliers = get_stat_outliers("202511250WAS", 2026, ["fg3"])
         print("Top 5 outliers by percentage:")
         for o in outliers[:5]:
             print(f"  {o.name} {o.stat} {o.val}/{o.avg} ({o.pct:.1f}%)")
