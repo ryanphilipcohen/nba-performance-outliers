@@ -27,6 +27,7 @@ Usage::
 
 import tkinter as tk
 from tkinter import ttk, messagebox
+import tkinter.font as tkfont
 from typing import List, Dict
 
 from main import (
@@ -48,6 +49,7 @@ import os
 TrackedGames: List[Dict] = []  # each entry is a schedule Game-like dict
 TRACKED_FILE = "tracked_games.json"
 checked_game_vars: List[tuple] = []
+CODE_TO_TEAM = {code: name for name, code in TEAM_TO_CODE.items()}
 
 # default stats to compute outliers for; editable in settings pane
 STATS_TO_TRACK = ["pts", "trb", "ast"]
@@ -146,7 +148,8 @@ def add_selected_game():
 
 def tracked_game_label(game: Dict) -> str:
     """Return a user-facing label for a tracked game."""
-    return f"{game['date']} {game['team']} vs {game['opponent']}"
+    home_team = CODE_TO_TEAM.get(game["team"], game["team"])
+    return f"{game['date']} {home_team} vs {game['opponent']}"
 
 
 def tracked_season_year(game: Dict) -> int:
@@ -228,6 +231,7 @@ def show_outliers():
     """Compute and display outliers for selected tracked game(s)."""
     game_ids = []
     year_by_game_id = {g["game_id"]: tracked_season_year(g) for g in TrackedGames}
+    tracked_by_game_id = {g["game_id"]: g for g in TrackedGames}
     try:
         game_ids = [gid for gid, var in checked_game_vars if var.get()]
     except NameError:
@@ -251,10 +255,26 @@ def show_outliers():
         # as needed.  determine the correct season using the helper so that
         # early‑season (Oct–Dec) games map into the following year.
         year = year_by_game_id.get(gid, season_year_for_game(gid))
-        run_game_scraper(gid, year)
+        game_stats = run_game_scraper(gid, year)
+        player_team_map = {p.player_name: p.team for p in game_stats}
         outs = get_stat_outliers(gid, year, stats_to_track=STATS_TO_TRACK)
         for o in outs:
-            all_outliers.append((gid, o))
+            game = tracked_by_game_id.get(gid, {})
+            all_outliers.append(
+                {
+                    "date": game.get("date", ""),
+                    "matchup": (
+                        f"{CODE_TO_TEAM.get(game.get('team', ''), game.get('team', ''))} "
+                        f"vs {game.get('opponent', '')}"
+                    ).strip(),
+                    "team": player_team_map.get(o.name, ""),
+                    "player": o.name,
+                    "stat": o.stat,
+                    "value": o.val,
+                    "avg": o.avg,
+                    "pct": o.pct,
+                }
+            )
 
     # clear tree
     for row in outlier_tree.get_children():
@@ -263,30 +283,50 @@ def show_outliers():
     # sort by selected metric
     metric = sort_var.get()
     if metric:
-        all_outliers.sort(key=lambda tup: getattr(tup[1], metric, 0), reverse=True)
+        all_outliers.sort(key=lambda row: row.get(metric, 0), reverse=True)
 
-    for gid, o in all_outliers:
+    for row in all_outliers:
         outlier_tree.insert(
             "",
             tk.END,
             values=(
-                gid,
-                o.name,
-                o.stat,
-                o.val,
-                o.avg,
-                f"{o.pct:.1f}",
+                row["date"],
+                row["matchup"],
+                row["team"],
+                row["player"],
+                row["stat"],
+                row["value"],
+                row["avg"],
+                f"{row['pct']:.1f}",
             ),
         )
+    fit_outlier_columns()
 
 
 def update_stats_to_track():
-    """Refresh the list of stats from the settings panel."""
+    """Refresh tracked stats from the outlier stats dropdown."""
     global STATS_TO_TRACK
-    STATS_TO_TRACK = []
-    for chk, stat in zip(stat_checks, available_stats):
-        if chk.var.get():
-            STATS_TO_TRACK.append(stat)
+    STATS_TO_TRACK = [stat for stat, var in stat_vars.items() if var.get()]
+    update_stats_menu_label()
+    show_outliers()
+
+
+def update_stats_menu_label():
+    """Show selected stat count in the stats dropdown trigger."""
+    selected = sum(1 for v in stat_vars.values() if v.get())
+    stats_menu_button.config(text=f"Stats ({selected})")
+
+
+def update_sort_menu_label():
+    """Show active sort metric in the sort dropdown trigger."""
+    sort_menu_button.config(text=f"Sort ({sort_var.get().upper()})")
+
+
+def set_sort_metric(metric: str):
+    """Set sort metric and immediately refresh outlier results."""
+    sort_var.set(metric)
+    update_sort_menu_label()
+    show_outliers()
 
 
 # ---------------------------------------------------------------------------
@@ -393,43 +433,67 @@ ttk.Button(
 # ensure the copy stays in sync when loading
 update_tracked_widgets()
 
-sort_var = tk.StringVar()
+sort_var = tk.StringVar(value="pct")
+available_stats = ["pts", "trb", "ast", "fg3", "fg", "fga"]
+stat_vars: Dict[str, tk.BooleanVar] = {}
 
 sort_controls = ttk.Frame(outliers_frame)
 sort_controls.pack(fill=tk.X, pady=5)
 
 ttk.Label(sort_controls, text="Sort by:").pack(side=tk.LEFT, padx=5)
-sort_combo = ttk.Combobox(sort_controls, textvariable=sort_var, width=10)
-sort_combo["values"] = ["stat", "val", "avg", "pct"]
-sort_combo.pack(side=tk.LEFT)
+sort_menu_button = ttk.Menubutton(sort_controls, text="Sort")
+sort_menu = tk.Menu(sort_menu_button, tearoff=False)
+sort_menu_button["menu"] = sort_menu
+for metric in ["stat", "val", "avg", "pct"]:
+    sort_menu.add_radiobutton(
+        label=metric.upper(),
+        variable=sort_var,
+        value=metric,
+        command=lambda m=metric: set_sort_metric(m),
+    )
+sort_menu_button.pack(side=tk.LEFT)
+update_sort_menu_label()
 
-ttk.Button(sort_controls, text="Refresh", command=show_outliers).pack(
-    side=tk.LEFT, padx=5
-)
-
-cols = ("game_id", "player", "stat", "value", "avg", "%")
-outlier_tree = ttk.Treeview(outliers_frame, columns=cols, show="headings")
-for c in cols:
-    outlier_tree.heading(c, text=c)
-outlier_tree.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
-
-# -- Settings tab ----------------------------------------------------------
-settings_frame = ttk.Frame(notebook)
-notebook.add(settings_frame, text="Settings")
-
-available_stats = ["pts", "trb", "ast", "fg3", "fg", "fga"]
-stat_checks: List[ttk.Checkbutton] = []
-
-setting_label = ttk.Label(settings_frame, text="Statistics to consider for outliers:")
-setting_label.pack(anchor=tk.W, pady=5)
-
+ttk.Label(sort_controls, text="Stats:").pack(side=tk.LEFT, padx=(10, 5))
+stats_menu_button = ttk.Menubutton(sort_controls, text="Stats")
+stats_menu = tk.Menu(stats_menu_button, tearoff=False)
+stats_menu_button["menu"] = stats_menu
 for stat in available_stats:
     var = tk.BooleanVar(value=(stat in STATS_TO_TRACK))
-    chk = ttk.Checkbutton(
-        settings_frame, text=stat, variable=var, command=update_stats_to_track
+    stat_vars[stat] = var
+    stats_menu.add_checkbutton(
+        label=stat.upper(),
+        variable=var,
+        command=update_stats_to_track,
     )
-    chk.var = var  # attach for later inspection
-    chk.pack(anchor=tk.W)
-    stat_checks.append(chk)
+stats_menu_button.pack(side=tk.LEFT)
+update_stats_menu_label()
+
+cols = ("date", "matchup", "team", "player", "stat", "value", "avg", "%")
+outlier_tree = ttk.Treeview(outliers_frame, columns=cols, show="headings")
+headers = {
+    "date": "Date",
+    "matchup": "Matchup",
+    "team": "Team",
+    "player": "Player",
+    "stat": "Stat",
+    "value": "Value",
+    "avg": "Avg",
+    "%": "%",
+}
+for c in cols:
+    outlier_tree.heading(c, text=headers[c])
+outlier_tree.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
+
+
+def fit_outlier_columns():
+    """Resize outlier table columns to fit header and cell text tightly."""
+    font = tkfont.nametofont("TkDefaultFont")
+    for col in cols:
+        max_width = font.measure(headers[col]) + 14
+        for item in outlier_tree.get_children():
+            text = str(outlier_tree.set(item, col))
+            max_width = max(max_width, font.measure(text) + 14)
+        outlier_tree.column(col, width=max_width, minwidth=max_width, stretch=False)
 
 root.mainloop()
