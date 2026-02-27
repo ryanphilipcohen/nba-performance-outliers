@@ -92,11 +92,14 @@ print(outliers[:10])
 
 ## Known Issue
 
-Season overlap caching (for adjacent years like 2025 and 2026) can return incorrect schedule rows in some cases. You already noted this in `goals.md`; adding an explicit `season_year` column to schedule records is a good fix direction.
+Season overlap caching (for adjacent years like 2025 and 2026) can return incorrect schedule rows in some cases when the script reads that 2025 games are present when they're from a different season.
+
+Rate limiter may have issues resulting in a temporary ban from scraping new data.
 
 ## TODO
 
-check if you're still hitting the rate limits? (403)
+Add season_year column and modify scripts to check season_year to avoid false positive cache checks
 
 Create venv and requirements.txt
+
 integrate into readme
