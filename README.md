@@ -1,107 +1,95 @@
 # NBA Performance Outliers
 
-A local Python app that helps you track NBA games you attended and find player performances that were outliers compared to season averages.
+Have I seen a bench player have a breakout game? Did a star player have a sneaky good rebounding game? What are the best performances I've seen at the NBA games I've been to?
 
-It includes:
-
-- `main.py`: scraping, caching, and outlier analysis logic
-- `frontend.py`: Tkinter GUI for loading schedules, tracking games, and viewing outliers
+This project is local Python desktop app using web scraping, a simple tkinter frontend, and sqlite3, for identifying standout NBA single-game performances from games you attended by comparing each player's box-score output to their season averages.
 
 ## Features
 
 - Pulls team schedules by season from Basketball Reference
 - Pulls single-game box score stats and season per-game averages
-- Caches data in SQLite databases to avoid repeated network calls
-- Computes outliers (example: points, rebounds, assists, 3PM) as `% of season average`
-- GUI to:
-  - load team schedules
-  - add/remove tracked games
-  - view and sort outliers
-  - choose which stats are considered in outlier calculations
+- Computes outlier scores as a percentage of season average (example: `pts`, `trb`, `ast`, `fg3`)
+- Caches schedules, box scores, and season averages in SQLite
+- GUI workflow for:
+  - loading schedules
+  - tracking attended games
+  - selecting which stats are included
+  - sorting and reviewing top outliers
 
 ## Project Structure
 
-- `frontend.py` - Tkinter desktop UI
-- `main.py` - backend scraping/parsing/storage/analysis functions
-- `goals.md` - project goals and TODOs
-- `rate_limiter.db` - API request window tracking
-- `nba_schedules.db` - cached team schedules
-- `nba_stats.db` - cached player game box-score stats
-- `nba_season_totals.db` - cached season per-game stats
-- `tracked_games.json` - persisted tracked games list (created automatically)
+- `frontend.py` - Tkinter app and user workflow
+- `backend.py` - scraping, parsing, caching, and outlier script logic
+- `.db` and `.json` files - generated for storing schedules, games, averages, and requests
 
-Python packages used:
+## Data and Cache Behavior
 
-- `requests`
-- `beautifulsoup4`
-- `tkinter` (included with most standard Python installs on Windows)
-
-## Setup
-
-1. Clone the repo.
-2. (Recommended) Create and activate a virtual environment.
-3. Install dependencies:
-
-```powershell
-pip install requests beautifulsoup4
-```
-
-## Usage
-
-Run the GUI:
-
-```powershell
-python frontend.py
-```
-
-### GUI workflow
-
-1. Open **Seasons** tab.
-2. Select a team and enter a season year.
-   - Example: `2026` means the **2025-26** NBA season.
-3. Click **Load Schedule**.
-4. Select a game and click **Add to tracked**.
-5. Open **Outliers** tab.
-6. Check one or more tracked games and click **Refresh**.
-7. Sort by `pct`, `val`, or other fields to inspect top outlier performances.
-
-### Backend usage (optional)
-
-If you want to run analysis from scripts:
-
-```python
-from main import run_schedule_scraper, run_game_scraper, get_stat_outliers, season_year_for_game
-
-schedule = run_schedule_scraper("WAS", 2026)
-game_id = schedule[0].game_id
-year = season_year_for_game(game_id)
-run_game_scraper(game_id, year)
-outliers = get_stat_outliers(game_id, year, ["pts", "trb", "ast", "fg3"])
-print(outliers[:10])
-```
-
-## Data and Caching Notes
-
-- Data is cached in local SQLite DB files in the project root.
-- `tracked_games.json` is created automatically when you add tracked games in the GUI.
-- To clear cached data, use helper functions in `main.py`:
+- Caches are persisted locally in SQLite files in the project root.
+- `tracked_games.json` is created automatically when you track games.
+- You can clear cached data with helper functions in `main.py`:
   - `clear_stats_db()`
   - `clear_season_db()`
   - `clear_schedule_db()`
   - `clear_all_dbs()`
 
+## Setup
+
+1. Clone the repository.
+2. Create and activate a virtual environment.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+```
+
+For macOS/Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+3. Install dependencies from `requirements.txt`:
+
+```powershell
+pip install -r requirements.txt
+```
+
+## Running the App
+
+```powershell
+python frontend.py
+```
+
+## Typical Workflow
+
+1. Open the **Seasons** tab.
+2. Select a team and enter season year.
+3. Click **Load Schedule**.
+4. Add one or more games to tracked games.
+5. Open **Outliers** tab.
+6. Select tracked games and click **Refresh**.
+7. Sort by `%`, `value`, or `avg` categories to inspect top performers or outliers relative to season averages.
+
+## Rate Limiting and Data Source Notes
+
+The app currently scrapes Basketball Reference pages, so request pacing matters.
+
+- Internal limiter is set to `19 requests / 60 seconds` (`MAX_CALLS=19`, `WINDOW_SIZE=60`) in `main.py`.
+
+Sports Reference bot/rate-limit policy:
+
+- https://www.sports-reference.com/bot-traffic.html
+
+If you are blocked, wait for the cooldown window and try again later.
+
 ## Known Issue
 
-Season overlap caching (for adjacent years like 2025 and 2026) can return incorrect schedule rows in some cases when the script reads that 2025 games are present when they're from a different season.
+Temporary rate-related scraping bans may occur despite the rate limiter. Cause of issue is unknown.
 
-Rate limiter may have issues resulting in a temporary ban from scraping new data.
+## Future Plans
 
-Database + json output location isn't standardized and can end up in folders outside of the repository
-
-## TODO
-
-Create venv and requirements.txt
-
-integrate into readme
-
-code review
+- Add export options (CSV/JSON) for outlier results
+- Improve location/config management for DB and JSON files
+- Add richer stat filters and presets in the UI
+- Create graphics for visualization and special easy-to-read exports

@@ -239,7 +239,9 @@ def init_schedule_db():
             )
         """
         )
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(team_schedule)").fetchall()}
+        cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(team_schedule)").fetchall()
+        }
         if "season_year" not in cols:
             conn.execute("ALTER TABLE team_schedule ADD COLUMN season_year INT")
 
@@ -302,9 +304,7 @@ def guarded_fetch(url):
                 time.sleep(2)
                 continue
             if response.status_code != 200:
-                raise RuntimeError(
-                    f"Failed request {url}: HTTP {response.status_code}"
-                )
+                raise RuntimeError(f"Failed request {url}: HTTP {response.status_code}")
             return response.text
         else:
             print(f"Limit reached ({count}/{MAX_CALLS}).")
@@ -929,30 +929,4 @@ def get_stat_outliers(game_id, year, stats_to_track=["pts", "trb", "ast", "fg3"]
 
 
 if __name__ == "__main__":
-    # Example usage of the scraping/analysis system.
-
-    # 1. ensure a team's season averages are cached
-    run_season_scraper("WAS", 2026)
-
-    # 2. grab (and cache) the schedule for the team
-    schedule = run_schedule_scraper("WAS", 2026)
-    print(f"Retrieved {len(schedule)} games for WAS 2026")
-
-    # 3. pick a specific game from the schedule and compare stats
-    if schedule:
-        # sample_game = schedule[0]  # first game as a simple example
-        # print(
-        #     f"Inspecting game {sample_game.game_id} vs {sample_game.opponent} on {sample_game.date}"
-        # )
-
-        # fetch the box-score stats (cached if already pulled earlier)
-        game_stats = run_game_scraper("202511250WAS", 2026)
-        print(f"Retrieved {len(game_stats)} player performances for game 202511250WAS")
-
-        # compute outliers relative to season averages
-        outliers = get_stat_outliers("202511250WAS", 2026, ["fg3"])
-        print("Top 5 outliers by percentage:")
-        for o in outliers[:5]:
-            print(f"  {o.name} {o.stat} {o.val}/{o.avg} ({o.pct:.1f}%)")
-    else:
-        print("Schedule was empty, nothing to inspect.")
+    pass

@@ -30,7 +30,7 @@ from tkinter import ttk, messagebox
 import tkinter.font as tkfont
 from typing import List, Dict
 
-from main import (
+from backend import (
     TEAM_TO_CODE,
     run_schedule_scraper,
     run_game_scraper,
@@ -320,7 +320,9 @@ def update_stats_menu_label():
 def update_sort_menu_label():
     """Show active sort metric in the sort dropdown trigger."""
     labels = {"value": "VALUE", "avg": "AVG", "pct": "%"}
-    sort_menu_button.config(text=f"Sort ({labels.get(sort_var.get(), sort_var.get().upper())})")
+    sort_menu_button.config(
+        text=f"Sort ({labels.get(sort_var.get(), sort_var.get().upper())})"
+    )
 
 
 def set_sort_metric(metric: str):
@@ -491,5 +493,6 @@ def fit_outlier_columns():
             text = str(outlier_tree.set(item, col))
             max_width = max(max_width, font.measure(text) + 14)
         outlier_tree.column(col, width=max_width, minwidth=max_width, stretch=False)
+
 
 root.mainloop()
