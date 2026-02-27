@@ -46,6 +46,14 @@ TEAM_TO_CODE = {
 
 MAX_CALLS = 19
 WINDOW_SIZE = 60
+REQUEST_TIMEOUT = 20
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    )
+}
 
 
 # Data structures used throughout the program.  Many of the original notes
@@ -253,18 +261,34 @@ def log_call():
 
 
 def guarded_fetch(url):
+    retries = 0
     while True:
         count = get_current_window_count()
         if count < MAX_CALLS:
             log_call()
             print(f"Requesting: {url} (Window count: {count + 1})")
-            response = requests.get(url)
+            try:
+                response = requests.get(
+                    url, headers=REQUEST_HEADERS, timeout=REQUEST_TIMEOUT
+                )
+            except requests.RequestException as exc:
+                retries += 1
+                if retries >= 3:
+                    raise RuntimeError(f"Request failed for {url}: {exc}") from exc
+                time.sleep(2 * retries)
+                continue
             if response.status_code == 429:
                 print("Hit 429 (Rate Limit)")
+                time.sleep(2)
                 continue
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Failed request {url}: HTTP {response.status_code}"
+                )
             return response.text
         else:
             print(f"Limit reached ({count}/{MAX_CALLS}).")
+            time.sleep(1)
 
 
 # Database

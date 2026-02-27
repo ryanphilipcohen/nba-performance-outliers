@@ -99,11 +99,23 @@ def load_schedule():
         return
 
     # use the scraping helper which will cache as needed
-    schedule = run_schedule_scraper(code, year_int)
+    try:
+        schedule = run_schedule_scraper(code, year_int)
+    except Exception as exc:
+        messagebox.showerror(
+            "Schedule load failed",
+            f"Could not load schedule for {team} {year_int}.\n\n{exc}",
+        )
+        return
     schedule_listbox.delete(0, tk.END)
     for game in schedule:
         schedule_listbox.insert(
             tk.END, f"{game.date} vs {game.opponent} ({game.game_id})"
+        )
+    if not schedule:
+        messagebox.showwarning(
+            "No schedule rows found",
+            "No games were parsed for that team/year. Try again or choose another season.",
         )
 
     # store list for later lookup

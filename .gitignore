@@ -1,4 +1,4 @@
 *.db
-.pycache
 __pycache__
 tracked_games.json
+venv/
