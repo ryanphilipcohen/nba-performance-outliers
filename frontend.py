@@ -137,6 +137,7 @@ def add_selected_game():
             "date": game.date,
             "opponent": game.opponent,
             "team": game.team_code,
+            "season_year": game.season_year,
         }
     )
     update_tracked_widgets()
@@ -146,6 +147,14 @@ def add_selected_game():
 def tracked_game_label(game: Dict) -> str:
     """Return a user-facing label for a tracked game."""
     return f"{game['date']} {game['team']} vs {game['opponent']}"
+
+
+def tracked_season_year(game: Dict) -> int:
+    """Return stored season year; fallback keeps legacy tracked_games.json working."""
+    year = game.get("season_year")
+    if year is None:
+        return season_year_for_game(game["game_id"])
+    return int(year)
 
 
 def populate_tracked_list():
@@ -218,6 +227,7 @@ def update_tracked_widgets():
 def show_outliers():
     """Compute and display outliers for selected tracked game(s)."""
     game_ids = []
+    year_by_game_id = {g["game_id"]: tracked_season_year(g) for g in TrackedGames}
     try:
         game_ids = [gid for gid, var in checked_game_vars if var.get()]
     except NameError:
@@ -240,7 +250,7 @@ def show_outliers():
         # ensure game statistics are available; this will also fetch seasons
         # as needed.  determine the correct season using the helper so that
         # early‑season (Oct–Dec) games map into the following year.
-        year = season_year_for_game(gid)
+        year = year_by_game_id.get(gid, season_year_for_game(gid))
         run_game_scraper(gid, year)
         outs = get_stat_outliers(gid, year, stats_to_track=STATS_TO_TRACK)
         for o in outs:

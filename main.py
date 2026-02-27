@@ -74,6 +74,7 @@ class Game:
     team_code: str
     date: str
     opponent: str
+    season_year: int
 
 
 @dataclass
@@ -230,9 +231,28 @@ def init_schedule_db():
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS team_schedule (
-                game_id TEXT PRIMARY KEY, team_code TEXT, date TEXT, opponent TEXT
+                game_id TEXT PRIMARY KEY,
+                team_code TEXT,
+                date TEXT,
+                opponent TEXT,
+                season_year INT
             )
         """
+        )
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(team_schedule)").fetchall()}
+        if "season_year" not in cols:
+            conn.execute("ALTER TABLE team_schedule ADD COLUMN season_year INT")
+
+        conn.execute(
+            """
+            UPDATE team_schedule
+            SET season_year = CASE
+                WHEN CAST(substr(game_id, 5, 2) AS INT) >= 10
+                    THEN CAST(substr(game_id, 1, 4) AS INT) + 1
+                ELSE CAST(substr(game_id, 1, 4) AS INT)
+            END
+            WHERE season_year IS NULL
+            """
         )
 
 
@@ -392,7 +412,7 @@ def save_schedule_to_db(data_list):
     """
     if not data_list:
         return
-    columns = ["game_id", "team_code", "date", "opponent"]
+    columns = ["game_id", "team_code", "date", "opponent", "season_year"]
     placeholders = ", ".join(["?" for _ in columns])
     query = f"INSERT OR REPLACE INTO team_schedule ({', '.join(columns)}) VALUES ({placeholders})"
     with sqlite3.connect(SCHEDULE_DB_NAME) as conn:
@@ -595,13 +615,14 @@ def parse_team_season(html_content, team_code, year):
     return result
 
 
-def parse_team_schedule(html_content, team_code):
+def parse_team_schedule(html_content, team_code, season_year):
     """Scrape the schedule table for a team/year and return
     ``List[Game]``.
 
     Args:
         html_content: the raw html from a /teams/XYZ/YYYY_games.html page
         team_code: three-letter code used on the page (e.g. "LAL").
+        season_year: season year associated with this schedule request.
 
     Returns:
         list of :class:`Game` objects.  An empty list indicates the schedule
@@ -627,6 +648,7 @@ def parse_team_schedule(html_content, team_code):
                 team_code=team_code,
                 date=row.find("td", {"data-stat": "date_game"}).get_text(),
                 opponent=row.find("td", {"data-stat": "opp_name"}).get_text(),
+                season_year=season_year,
             )
         )
     return games
@@ -678,13 +700,11 @@ def get_cached_schedule(team_code, year):
     """
     team_code = normalize_team_code(team_code)
     year = normalize_year(year)
-    prefix1 = f"{year-1:04d}%"
-    prefix2 = f"{year:04d}%"
     with sqlite3.connect(SCHEDULE_DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM team_schedule WHERE team_code = ? AND (game_id LIKE ? OR game_id LIKE ?)",
-            (team_code, prefix1, prefix2),
+            "SELECT * FROM team_schedule WHERE team_code = ? AND season_year = ?",
+            (team_code, year),
         ).fetchall()
         return [Game(**dict(r)) for r in rows]
 
@@ -725,7 +745,7 @@ def get_all_cached_games():
     with sqlite3.connect(SCHEDULE_DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT game_id, team_code, date, opponent FROM team_schedule ORDER BY game_id DESC"
+            "SELECT game_id, team_code, date, opponent, season_year FROM team_schedule ORDER BY game_id DESC"
         ).fetchall()
         return [Game(**dict(r)) for r in rows]
 
@@ -769,7 +789,7 @@ def run_schedule_scraper(team_code, year):
 
     url = f"https://www.basketball-reference.com/teams/{team_code}/{year}_games.html"
     html = guarded_fetch(url)
-    games = parse_team_schedule(html, team_code)
+    games = parse_team_schedule(html, team_code, year)
     if games:
         save_schedule_to_db(games)
     return games

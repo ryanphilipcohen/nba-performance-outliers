@@ -96,10 +96,12 @@ Season overlap caching (for adjacent years like 2025 and 2026) can return incorr
 
 Rate limiter may have issues resulting in a temporary ban from scraping new data.
 
-## TODO
+Database + json output location isn't standardized and can end up in folders outside of the repository
 
-Add season_year column and modify scripts to check season_year to avoid false positive cache checks
+## TODO
 
 Create venv and requirements.txt
 
 integrate into readme
+
+code review
