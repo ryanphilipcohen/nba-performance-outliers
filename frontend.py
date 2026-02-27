@@ -1,30 +1,3 @@
-"""Simple tkinter GUI frontend for nba-performance-outliers
-
-This module provides a basic interface on top of the scraping/analysis
-functions defined in :mod:`main`.  It exposes three panels:
-
-1. **Seasons** – choose a team and a season year (e.g. enter 2026 to
-   fetch the 2025‑26 slate, which includes games played in late 2025), load
-   the schedule and optionally add games to a tracked list.
-2. **Outliers** – browse the games you have added, inspect individual or
-   multiple games for statistical outliers, and sort by different metrics.
-3. **Settings** – adjust a few configuration options (currently just the
-   list of stats that the outlier engine considers).
-
-The GUI is intentionally lightweight; it uses ``tkinter`` since no external
-dependencies are required.  It stores the list of tracked games in memory
-for the duration of the session and also persists them to ``tracked_games.json``
-so that your selection survives restarts.  When you switch to the Outliers
-panel the same tracked list appears there; select one or more games and
-click *Refresh* to compute the statistical outliers.  (The persistence layer
-could be swapped for a database or other storage later.)
-
-Usage::
-
-    python frontend.py
-
-"""
-
 import tkinter as tk
 from tkinter import ttk, messagebox
 import tkinter.font as tkfont
