@@ -319,7 +319,8 @@ def update_stats_menu_label():
 
 def update_sort_menu_label():
     """Show active sort metric in the sort dropdown trigger."""
-    sort_menu_button.config(text=f"Sort ({sort_var.get().upper()})")
+    labels = {"value": "VALUE", "avg": "AVG", "pct": "%"}
+    sort_menu_button.config(text=f"Sort ({labels.get(sort_var.get(), sort_var.get().upper())})")
 
 
 def set_sort_metric(metric: str):
@@ -422,13 +423,8 @@ ttk.Button(
     command=lambda: set_all_outlier_checks(True),
 ).pack(side=tk.LEFT)
 ttk.Button(
-    outlier_check_controls,
-    text="Clear checks",
-    command=lambda: set_all_outlier_checks(False),
-).pack(side=tk.LEFT, padx=5)
-ttk.Button(
     outlier_check_controls, text="Remove checked", command=remove_checked_games
-).pack(side=tk.LEFT)
+).pack(side=tk.LEFT, padx=5)
 
 # ensure the copy stays in sync when loading
 update_tracked_widgets()
@@ -444,9 +440,9 @@ ttk.Label(sort_controls, text="Sort by:").pack(side=tk.LEFT, padx=5)
 sort_menu_button = ttk.Menubutton(sort_controls, text="Sort")
 sort_menu = tk.Menu(sort_menu_button, tearoff=False)
 sort_menu_button["menu"] = sort_menu
-for metric in ["stat", "val", "avg", "pct"]:
+for metric in ["value", "avg", "pct"]:
     sort_menu.add_radiobutton(
-        label=metric.upper(),
+        label=("VALUE" if metric == "value" else ("AVG" if metric == "avg" else "%")),
         variable=sort_var,
         value=metric,
         command=lambda m=metric: set_sort_metric(m),
