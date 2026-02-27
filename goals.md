@@ -28,3 +28,11 @@ I want to know what were the best performances I've seen from the NBA games I've
 2. Create a requirements.txt file if needed (?)
 3. Create a README.md with instructions on how to use
 4. Make the repo public
+
+#### Stage 4: Additional Ideas
+
+pick one for cache storage:
+
+1. remove from cache when it's removed from the list
+2. have some hard limit where it starts kicking out something so it doesn't get infinitely largest
+   technically size isn't really an issue, its such a small amount of info i can't imagine itll matter.

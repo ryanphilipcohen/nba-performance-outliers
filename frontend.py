@@ -47,6 +47,7 @@ import os
 
 TrackedGames: List[Dict] = []  # each entry is a schedule Game-like dict
 TRACKED_FILE = "tracked_games.json"
+checked_game_vars: List[tuple] = []
 
 # default stats to compute outliers for; editable in settings pane
 STATS_TO_TRACK = ["pts", "trb", "ast"]
@@ -126,49 +127,102 @@ def add_selected_game():
             "team": game.team_code,
         }
     )
-    tracked_listbox.insert(tk.END, f"{game.date} {game.team_code} vs {game.opponent}")
+    update_tracked_widgets()
+    save_tracked_games()
+
+
+def tracked_game_label(game: Dict) -> str:
+    """Return a user-facing label for a tracked game."""
+    return f"{game['date']} {game['team']} vs {game['opponent']}"
 
 
 def populate_tracked_list():
     """(re)fill the tracked-games listbox from the in-memory store."""
     tracked_listbox.delete(0, tk.END)
     for g in TrackedGames:
-        tracked_listbox.insert(tk.END, f"{g['date']} {g['team']} vs {g['opponent']}")
+        tracked_listbox.insert(tk.END, tracked_game_label(g))
+
+
+def remove_games_by_ids(game_ids):
+    """Remove all tracked games whose ids are in game_ids."""
+    if not game_ids:
+        return
+    TrackedGames[:] = [g for g in TrackedGames if g["game_id"] not in set(game_ids)]
+    update_tracked_widgets()
+    save_tracked_games()
+
+
+def remove_selected_games():
+    """Remove selected games from the Seasons panel tracked list."""
+    sel = tracked_listbox.curselection()
+    if not sel:
+        return
+    ids = [TrackedGames[i]["game_id"] for i in sel]
+    remove_games_by_ids(ids)
+
+
+def build_outlier_checkboxes():
+    """Rebuild the checkbox list used to select games in Outliers."""
+    global checked_game_vars
+    checked_game_vars = []
+    for child in outlier_checks_inner.winfo_children():
+        child.destroy()
+
+    for game in TrackedGames:
+        var = tk.BooleanVar(value=True)
+        chk = ttk.Checkbutton(
+            outlier_checks_inner,
+            text=tracked_game_label(game),
+            variable=var,
+            command=lambda: root.after(10, show_outliers),
+        )
+        chk.pack(anchor=tk.W, fill=tk.X, padx=2, pady=1)
+        checked_game_vars.append((game["game_id"], var))
+
+
+def set_all_outlier_checks(value: bool):
+    """Set all outlier game checkboxes to value and refresh."""
+    for _, var in checked_game_vars:
+        var.set(value)
+    show_outliers()
+
+
+def remove_checked_games():
+    """Remove games checked in the Outliers panel."""
+    ids = [gid for gid, var in checked_game_vars if var.get()]
+    remove_games_by_ids(ids)
 
 
 def update_tracked_widgets():
     """Refresh all widgets that display the tracked games."""
     populate_tracked_list()
-    # if outliers list exists, update it as well
+    # if outliers widgets exist, update them as well
     try:
-        tracked_out_listbox.delete(0, tk.END)
-        for g in TrackedGames:
-            tracked_out_listbox.insert(
-                tk.END, f"{g['date']} {g['team']} vs {g['opponent']}"
-            )
+        build_outlier_checkboxes()
     except NameError:
         pass
 
 
 def show_outliers():
     """Compute and display outliers for selected tracked game(s)."""
-    # prefer the outliers panel list if it exists and has a selection
-    sel = ()
+    game_ids = []
     try:
-        sel = tracked_out_listbox.curselection()
+        game_ids = [gid for gid, var in checked_game_vars if var.get()]
     except NameError:
         pass
-    # fall back to the seasons tab list if nothing selected in outliers panel
-    if not sel:
+    # fall back to seasons tab selection if no games are checked in Outliers
+    if not game_ids:
         sel = tracked_listbox.curselection()
-    if not sel:
+        if sel:
+            game_ids = [TrackedGames[i]["game_id"] for i in sel]
+    if not game_ids:
+        sel = tracked_listbox.curselection()
         # default to all tracked games if there are any
         if TrackedGames:
-            sel = tuple(range(len(TrackedGames)))
+            game_ids = [g["game_id"] for g in TrackedGames]
         else:
             messagebox.showinfo("No games", "You haven't tracked any games yet.")
             return
-    game_ids = [TrackedGames[i]["game_id"] for i in sel]
     all_outliers = []
     for gid in game_ids:
         # ensure game statistics are available; this will also fetch seasons
@@ -271,6 +325,14 @@ tracked_label.pack()
 tracked_listbox = tk.Listbox(seasons_frame, selectmode=tk.EXTENDED, height=8)
 tracked_listbox.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
 
+tracked_buttons = ttk.Frame(seasons_frame)
+tracked_buttons.pack(fill=tk.X, padx=5, pady=(0, 5))
+ttk.Button(
+    tracked_buttons,
+    text="Remove selected",
+    command=remove_selected_games,
+).pack(side=tk.LEFT)
+
 # load any previously saved tracked games and populate both lists
 load_tracked_games()
 update_tracked_widgets()
@@ -281,14 +343,30 @@ notebook.add(outliers_frame, text="Outliers")
 
 # tracked games shown in this panel as well; selecting filters the
 # outliers immediately
-ttk.Label(outliers_frame, text="Tracked games (select one or more to filter):").pack(
+ttk.Label(outliers_frame, text="Tracked games (check one or more to filter):").pack(
     anchor=tk.W, pady=(5, 0)
 )
-tracked_out_listbox = tk.Listbox(outliers_frame, selectmode=tk.EXTENDED, height=6)
-tracked_out_listbox.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
 
-# automatically refresh when selection changes
-tracked_out_listbox.bind("<<ListboxSelect>>", lambda e: root.after(10, show_outliers))
+outlier_checks_outer = ttk.Frame(outliers_frame)
+outlier_checks_outer.pack(fill=tk.BOTH, padx=5, pady=5, expand=True)
+outlier_checks_inner = ttk.Frame(outlier_checks_outer)
+outlier_checks_inner.pack(fill=tk.BOTH, expand=True)
+
+outlier_check_controls = ttk.Frame(outliers_frame)
+outlier_check_controls.pack(fill=tk.X, padx=5, pady=(0, 5))
+ttk.Button(
+    outlier_check_controls,
+    text="Select all",
+    command=lambda: set_all_outlier_checks(True),
+).pack(side=tk.LEFT)
+ttk.Button(
+    outlier_check_controls,
+    text="Clear checks",
+    command=lambda: set_all_outlier_checks(False),
+).pack(side=tk.LEFT, padx=5)
+ttk.Button(
+    outlier_check_controls, text="Remove checked", command=remove_checked_games
+).pack(side=tk.LEFT)
 
 # ensure the copy stays in sync when loading
 update_tracked_widgets()

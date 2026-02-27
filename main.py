@@ -692,6 +692,33 @@ def get_cached_game(game_id):
         return [PlayerGamePerformance(**dict(r)) for r in rows]
 
 
+def get_all_cached_games():
+    """Return every cached schedule game in the database.
+
+    Returns:
+        ``List[Game]`` sorted by newest game_id first.
+    """
+    with sqlite3.connect(SCHEDULE_DB_NAME) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT game_id, team_code, date, opponent FROM team_schedule ORDER BY game_id DESC"
+        ).fetchall()
+        return [Game(**dict(r)) for r in rows]
+
+
+def remove_game_from_cache(game_id):
+    """Delete a single game from cache databases.
+
+    This removes:
+    - the schedule row in ``team_schedule``
+    - all box score rows in ``player_performances``
+    """
+    with sqlite3.connect(SCHEDULE_DB_NAME) as conn:
+        conn.execute("DELETE FROM team_schedule WHERE game_id = ?", (game_id,))
+    with sqlite3.connect(STATS_DB_NAME) as conn:
+        conn.execute("DELETE FROM player_performances WHERE game_id = ?", (game_id,))
+
+
 def run_schedule_scraper(team_code, year):
     """Fetch a team's schedule for ``year``.
 
